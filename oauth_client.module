@@ -1,0 +1,159 @@
+<?php
+/**
+ * @file
+ * A short description of this module.
+ */
+
+require_once BACKDROP_ROOT . '/modules/oauth_client/includes/Handler.php';
+require_once BACKDROP_ROOT . '/modules/oauth_client/includes/Utilities.php';
+
+/**
+ * Implements hook_menu().
+ */
+function oauth_client_menu() {
+
+  $items['admin/config/administration/oauth_client'] = array(
+    'title' => 'OAuth Client Login Configuration',
+    'description' => 'OAuth Client Login Configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('oauth_client_config'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'oauth_client_config.inc',
+  );
+
+  $items['testConfig'] = array(
+    'access arguments' => array('administer site configuration'),
+    'page callback' => 'test_mo_config',
+    'type' => MENU_CALLBACK
+  );
+
+  $items['oauth_login'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'test_config',
+    'type' => MENU_CALLBACK
+  );
+
+  $items['OAuthLogin'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'oauth_client_oauthlogin',
+    'type' => MENU_CALLBACK
+  );
+
+  return $items;
+}
+
+function test_mo_config()
+{
+  user_cookie_save(array("mo_oauth_test" => true));
+  oauth_client_initiateLogin();
+}
+
+function test_config(){
+  $code = $_GET['code'] ?? '';
+  $state = $_GET['state'] ?? '';
+  $code = isset($code) ? check_plain($code) : '';
+  $state = isset($state) ? check_plain($state) : '';
+  if (!isset($code)) {
+    if(isset($_GET['error_description']))
+      exit($_GET['error_description']);
+    else if(isset($_GET['error']))
+      exit($_GET['error']);
+    exit('Invalid response');
+  } else if(isset($state )) {
+    if(session_id() == '' || !isset($_SESSION))
+      session_start();
+
+    $currentappname = "";
+    if (isset($_SESSION['appname']) && !empty($_SESSION['appname']))
+      $currentappname = $_SESSION['appname'];
+    else if (isset($state) && !empty($state))
+    {
+      $currentappname = base64_decode($state);
+    }
+    if (empty($currentappname)) {
+      exit('No request found for this application.');
+    }
+  }
+
+  //Access Token Flow
+
+  $app_values = config_get('oauth_client.settings', 'oauth_client_app_values');
+  $callback_uri = config_get('oauth_client.settings', 'outh_client_callback_uri');
+  $parse_from_header = false;
+  $parse_from_body = true;
+  $accessToken = getAccessToken($app_values['token_ep'], 'authorization_code', $app_values['client_id'],
+    $app_values['client_secret'], $code, $callback_uri, $parse_from_header, $parse_from_body);
+
+  $resourceOwner = getResourceOwner($app_values['user_info_ep'], $accessToken);
+
+  if (isset($_COOKIE['Backdrop_visitor_mo_oauth_test']) && $_COOKIE['Backdrop_visitor_mo_oauth_test']) {
+
+    user_cookie_save(array("mo_oauth_test" => false));
+    $username = $resourceOwner['email'] ?? 'User';
+    $someattrs = '';
+    show_attr($resourceOwner, $someattrs, 0, '', '<tr style="text-align:center;">', "<td style='font-weight:bold;padding:2%;border:2px solid #949090; word-wrap:break-word;'>" );
+    echo '<div style="font-family:Calibri;padding:0 3%;">';
+    echo '<div style="color: #3c763d;background-color: #dff0d8; padding:2%;margin-bottom:20px;text-align:center; border:1px solid #AEDB9A;
+                        font-size:15pt;">
+                        TEST SUCCESSFUL
+                      </div>';
+    echo '<span style="font-size:13pt;"><b>Hello</b>, '.$username.'</span><br/>
+                      <p style="font-weight:bold;font-size:13pt;margin-left:1%;">ATTRIBUTES RECEIVED:</p>
+                      <table style="border-collapse:collapse;border-spacing:0; display:table;width:100%; font-size:13pt;background-color:#EDEDED;">
+                          <tr style="text-align:center;">
+                              <td style="font-weight:bold;border:2px solid #949090;padding:2%;">ATTRIBUTE NAME</td>
+                              <td style="font-weight:bold;padding:2%;border:2px solid #949090; word-wrap:break-word;">ATTRIBUTE VALUE</td>
+                          </tr>';
+    echo $someattrs;
+    echo '</table>';
+    exit();
+  }
+
+  global $base_url;
+  global $user;
+
+  if (empty($app_values['email_attribute'])){
+    backdrop_set_message('Email Attribute is not configured', 'error');
+    backdrop_goto($base_url.'/user/login');
+  }
+
+  $email_attr = $app_values['email_attribute'];
+  $email = $resourceOwner[$email_attr];
+
+  $account = user_load_by_mail($email);
+  if ($account == NULL){
+    backdrop_set_message('User Account does not exist in the Backdrop.', 'error');
+    backdrop_goto($base_url.'/user/login');
+  }
+  flood_clear_event($account->name);
+  $user = user_load($account->uid);
+
+  $edit = array();
+  $edit['redirect'] = $base_url;
+  user_login_finalize($edit);
+
+  backdrop_goto($edit['redirect']);
+}
+
+function oauth_client_oauthlogin()
+{
+  oauth_client_initiateLogin();
+}
+
+function oauth_client_form_alter(&$form, &$form_state, $form_id){
+  global $base_url;
+
+  $app_values = config_get('oauth_client.settings', 'oauth_client_app_values');
+
+  if($app_values['enable_sso'] && (($form_id == 'user_login_block') || ($form_id == 'user_login')))
+  {
+    $oauth_login_url = $base_url . '/?q=OAuthLogin';
+
+    $form['loginurl'] = array(
+      array(
+        '#markup' => '<a class="button button-primary" href="' . $oauth_login_url . '">Login using OAuth</a>'
+      )
+    );
+
+  }
+}

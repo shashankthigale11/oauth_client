@@ -1,0 +1,7 @@
+<?php
+
+function oauth_client_uninstall(){
+  $config = config('oauth_client.settings');
+  $config->clear('oauth_client_app_values');
+  $config->save();
+}

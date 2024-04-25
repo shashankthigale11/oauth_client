@@ -1,0 +1,15 @@
+type = module
+name = OAuth Client
+description = Implements Single Sign On (SSO) using OAuth Protocol
+backdrop = 1.x
+
+; Link to the module's configuration page.
+configure = admin/config/administration/oauth_client
+
+; Add custom CSS & JS files.
+; stylesheets[all][] = css/mymodule.css
+scripts[] = js/testconfig.js
+
+; Find suggested packages and tags at: https://docs.backdropcms.org/documentation/module-packages-and-tags
+package = SSO
+tags[] = Administration
