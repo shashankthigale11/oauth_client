@@ -26,7 +26,7 @@ new/additional maintainers.
 Credits
 -------
 
-- Ported to Backdrop CMS by [Shashank Thigale](https://github.com/shashankthigale11).
+- Created for Backdrop CMS by [Shashank Thigale](https://github.com/shashankthigale11).
 
 License
 -------
